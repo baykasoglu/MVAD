@@ -1,5 +1,8 @@
 # MVAD User Manual
-
+This project is coded for solving multi-criteria decision-making (MCDM) problems using Weighted Multi Variable Hierarchical Axiomatic Design Method .    
+This project and the MCDMAxiom library is developed by Adil Baykasoglu and Filiz Senyuzluler Ozcelik .     
+     
+___
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Installation](#installation)
@@ -76,7 +79,11 @@ MVAD/
 ├── test.py                 # Example usage script
 ├── test/                   # Sample data files
 │   ├── LaptopCase_Features.csv
+│   ├── LaptopCase_EqualWeights.csv
 │   ├── LaptopCase_Weights.csv
+│   ├── LaptopCase_Dataset.csv
+│   ├── LaptopExample_Features.csv
+│   ├── LaptopExample_Weights.csv
 │   └── LaptopCase_Dataset.csv
 ├── requirements.txt        # Python dependencies
 └── README.md              # Project documentation
