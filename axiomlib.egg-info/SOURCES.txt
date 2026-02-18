@@ -1,0 +1,10 @@
+README.md
+setup.py
+axiomlib/__init__.py
+axiomlib/axiom.py
+axiomlib/calculate.py
+axiomlib/weightCalculate.py
+axiomlib.egg-info/PKG-INFO
+axiomlib.egg-info/SOURCES.txt
+axiomlib.egg-info/dependency_links.txt
+axiomlib.egg-info/top_level.txt
