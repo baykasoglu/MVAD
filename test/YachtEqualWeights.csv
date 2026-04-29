@@ -1,0 +1,17 @@
+feature_name,hierarchy,parent,weight
+Price,0,-,1
+Year,0,-,1
+Cabins,0,-,1
+WC,0,-,1
+Length,0,-,1
+Deepness,0,-,1
+Width,0,-,1
+Weight,0,-,1
+WaterTank,0,-,1
+FuelTank,0,-,1
+MotorHour,0,-,1
+MotorPower,0,-,1
+MaintenanceRecord,0,-,1
+Radar,0,-,1
+Jenerator,0,-,1
+GPS,0,-,1
