@@ -1,518 +1,288 @@
 # MVAD User Manual
-This project is coded for solving multi-criteria decision-making (MCDM) problems using Weighted Multi Variable Hierarchical Axiomatic Design Method .    
-This project and the MCDMAxiom library is developed by Adil Baykasoglu and Filiz Senyuzluler Ozcelik .     
-     
-___
-## Table of Contents
+
+**MVAD** (Multi-Variable Axiomatic Design) is a Python project for multi-criteria decision-making (MCDM) using the weighted hierarchical **Axiomatic Design** methodology plus a **Minkowski distance** layer with **Prospect Theory**. The **`MCDMAxiom`** modules and tooling are developed by Adil Baykasoglu and Filiz Senyuzluler.
+
+---
+
+## Table of contents
+
 1. [Introduction](#introduction)
-2. [Installation](#installation)
-3. [Project Overview](#project-overview)
-4. [Input File Formats](#input-file-formats)
-5. [Usage Guide](#usage-guide)
-6. [Output Explanation](#output-explanation)
-7. [Examples](#examples)
-8. [Troubleshooting](#troubleshooting)
-9. [References](#references)
+2. [Repository layout](#repository-layout)
+3. [Installation](#installation)
+4. [How it works](#how-it-works)
+5. [Input file formats](#input-file-formats)
+6. [Usage](#usage)
+7. [Outputs](#outputs)
+8. [Worked example (yacht dataset)](#worked-example-yacht-dataset)
+9. [Troubleshooting](#troubleshooting)
+10. [References](#references)
 
 ---
 
 ## Introduction
 
-**MVAD** (Multi-Variable Axiomatic Design) is a Python library for solving multi-criteria decision-making (MCDM) problems using two complementary methodologies:
+Two complementary evaluation paths are available:
 
-1. **Axiomatic Design Methodology (MCDMAxiom)**: A weighted hierarchical approach for evaluating alternatives based on Information Content (I-Value)
-2. **Minkowski Distance with Prospect Theory**: An advanced distance-based method that combines Minkowski distance calculations with Prospect Theory value functions
+1. **MCDMAxiom (Axiomatic Design)** — Hierarchical weights and **Information Content** (I-value) per alternative; lower I-value means a better fit to stated design ranges and types.
+2. **Minkowski–Prospect** — Distances between alternatives and ideal points, combined with Prospect Theory value functions; **CA_Value** (higher is better) ranks acceptable options.
 
-This library is particularly useful for recommendation systems, product selection, and decision support applications where multiple criteria need to be evaluated simultaneously.
+Typical uses include recommendation systems, product or asset selection, and any setting where alternatives are scored on many criteria at once.
+
+---
+
+## Repository layout
+
+```
+MVAD/
+├── MCDMAxiom/                 # Core package (import as MCDMAxiom)
+│   ├── __init__.py
+│   ├── axiom.py               # CSV readers, result display
+│   ├── calculate.py           # Axiomatic Design I-value pipeline
+│   └── weightCalculate.py     # Weight hierarchy and normalization
+├── minkowski.py               # Minkowski–Prospect integration
+├── prospect.py                # Prospect Theory value functions
+├── test.py                    # Demo script (uses test/ yacht sample)
+├── test/                      # Sample CSV bundle (marine / yacht scenario)
+│   ├── YachtFeatureList.csv
+│   ├── YachtEqualWeights.csv
+│   ├── YachtDifferentWeights.csv
+│   └── YachtDataset.csv
+├── lib/                       # Static front-end libraries (optional)
+│   ├── tom-select/
+│   └── vis-9.0.4/ / vis-9.1.2/
+├── requirements.txt
+├── setup.py                   # setuptools metadata (egg name differs from folder; see below)
+├── build/ / axiomlib.egg-info/  # Generated if you build/install; safe to regenerate
+└── README.md                  # This manual
+```
+
+**Notes:**
+
+- **`MCDMAxiom`** is the Python package directory you import (`import MCDMAxiom.axiom as ax`). Root-level **`minkowski.py`** / **`prospect.py`** complete the Prospect pipeline.
+- **`test/`** currently ships **one end-to-end scenario**: the yacht listing sample (features, weights, alternatives).
+- **`lib/`** contains vendored CSS/JS (**vis-network**, **tom-select**). Nothing in **`MCDMAxiom`** imports these; keep them if you attach a browser UI elsewhere.
+- **`setup.py`** is named **`axiomlib`** in setuptools metadata while the editable source tree exposes **`MCDMAxiom`**. Prefer running from the project root with dependencies from **`requirements.txt`** unless you align the package name in **`setup.py`** with your install layout.
+- **`build/`** and **`axiomlib.egg-info/`** are build outputs; they can be omitted from version control or regenerated.
 
 ---
 
 ## Installation
 
-### Prerequisites
-- Python 3.7 or higher
-- pip package manager
-
-### Step 1: Install Dependencies
-
-Install all required packages using the provided requirements file:
+**Prerequisites:** Python 3.7+, **pip**.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-This will install:
-- numpy==1.24.3
-- pandas==2.0.3
-- scipy==1.11.4
-- sympy==1.12
+Pinned versions (see **`requirements.txt`**): **numpy**, **pandas**, **scipy**, **sympy**.
 
-### Step 2: Verify Installation
-
-You can verify the installation by running a simple import test:
+**Verify imports** (run from the **MVAD** project root so **`MCDMAxiom`** is on the path):
 
 ```python
 import MCDMAxiom.axiom as ax
 import MCDMAxiom.calculate as cal
 import minkowski
-import numpy as np
-import pandas as pd
 ```
-
-If no errors occur, the installation is successful.
 
 ---
 
-## Project Overview
+## How it works
 
-### Project Structure
+| Piece | Role |
+|--------|------|
+| **`readCriteria()`** | Loads the feature / design-requirement matrix from CSV. |
+| **`readWeights()`** | Loads weights and optional parent–child hierarchy. |
+| **`readData()`** | Loads alternatives and infers cell types (singleton, interval, fuzzy, boolean). |
+| **`runMCDMAxiom()`** | Computes normalized I-values and returns ranked rows + **`IValue`**. |
+| **`Minkowski_Prospect()`** | Runs the Minkowski–Prospect ranking ( **`CA_Value`** ). |
+| **`showRecommendationResults()`** | Pretty-prints tabular results (axiom and minkowski modules). |
 
-```
-MVAD/
-├── MCDMAxiom/              # Core Axiomatic Design module
-│   ├── __init__.py
-│   ├── axiom.py            # Data reading functions
-│   ├── calculate.py        # Axiomatic Design calculations
-│   └── weightCalculate.py  # Weight normalization functions
-├── minkowski.py            # Minkowski-Prospect implementation
-├── prospect.py             # Prospect Theory value functions
-├── test.py                 # Example usage script
-├── test/                   # Sample data files
-│   ├── LaptopCase_Features.csv
-│   ├── LaptopCase_EqualWeights.csv
-│   ├── LaptopCase_Weights.csv
-│   ├── LaptopCase_Dataset.csv
-│   ├── LaptopExample_Features.csv
-│   ├── LaptopExample_Weights.csv
-│   └── LaptopCase_Dataset.csv
-├── requirements.txt        # Python dependencies
-└── README.md              # Project documentation
-```
-
-### Key Components
-
-1. **MCDMAxiom Module**: Implements the Axiomatic Design methodology
-   - `readCriteria()`: Reads criteria/features from CSV
-   - `readWeights()`: Reads weight configurations from CSV
-   - `readData()`: Reads dataset/alternatives from CSV
-   - `runMCDMAxiom()`: Performs Axiomatic Design calculations
-   - `showRecommendationResults()`: Displays results
-
-2. **Minkowski Module**: Implements Minkowski distance with Prospect Theory
-   - `Minkowski_Prospect()`: Main function combining distance and prospect calculations
-   - `runMinkowski()`: Calculates Minkowski distances
-   - `value_function()`: Applies Prospect Theory value function
-   - Various distance calculation functions for different data types
+Weights are normalized; hierarchical weights combine levels as described in the cited literature.
 
 ---
 
-## Input File Formats
+## Input file formats
 
-### 1. Features/Criteria File (CSV)
+### 1. Features / criteria CSV
 
-This file defines the design requirements and criteria for evaluation.
+**Columns (in order):** `feature_name`, `value`, `fuzziness`, `design_req`, `criteria_type`
 
-**Required Columns (in order):**
-- `feature_name`: Name of the criterion
-- `value`: The target value for the criterion
-- `fuzziness`: Deviation rate for fuzzy values (use `-` for non-fuzzy)
-- `design_req`: Design requirement type
-- `criteria_type`: Type of criterion (BENEFIT, COST, or TARGET)
+| `design_req` | Meaning |
+|----------------|---------|
+| `CSINGLETON` | Single crisp target |
+| `CINTERVAL` | Interval, e.g. `"1000-7500"` |
+| `FUZZY` | Fuzzy target; set `fuzziness` (use `-` if not fuzzy) |
+| `BOOLEAN` | `Yes`, `No`, or `Both` |
 
-**Design Requirement Types:**
-- `CSINGLETON`: Exact/crisp single value (e.g., `12`, `8`)
-- `CINTERVAL`: Interval range (e.g., `"10-20"`, `"1000-7500"`)
-- `FUZZY`: Fuzzy value with uncertainty (e.g., `4` with fuzziness `1`)
-- `BOOLEAN`: Boolean values (`Yes`, `No`, or `Both`)
+| `criteria_type` | Meaning |
+|-----------------|--------|
+| `BENEFIT` | Larger attribute values are better |
+| `COST` | Smaller is better |
+| `TARGET` | Match target / interval as specified by pairing rules in code |
 
-**Criteria Types:**
-- `BENEFIT`: Higher values are better (e.g., RAM, Screen Size)
-- `COST`: Lower values are better (e.g., Price, Weight)
-- `TARGET`: Specific target value is desired (e.g., Status, Battery)
+### 2. Weights CSV
 
-**Example:**
-```csv
-feature_name,value,fuzziness,design_req,criteria_type
-RAM,8,-,CSINGLETON,BENEFIT
-Price,"10000-45000",-,CINTERVAL,COST
-Status,4,1,FUZZY,TARGET
-Guarantee,Both,-,BOOLEAN,BENEFIT
-```
+**Columns:** `feature_name`, `hierarchy`, `parent`, `weight`
 
-**Notes:**
-- Use `-` in `fuzziness` column for non-fuzzy values
-- Interval values must be in quotes: `"10-20"`
-- Boolean values: `Yes`, `No`, or `Both` (accepts both)
+- Top level: `hierarchy` `0`, `parent` `-` (or as your convention allows).
+- Sub-criteria: higher `hierarchy`, `parent` set to the parent feature name.
+- Weights are relative (e.g. 1–5); the library normalizes them.
 
-### 2. Weights File (CSV)
+### 3. Dataset CSV
 
-This file defines the importance weights for each criterion, optionally with hierarchy.
+- First column: **`ListingID`** (unique id per alternative).
+- Remaining columns: one per criterion, **same names and order** as in the features file.
 
-**Required Columns (in order):**
-- `feature_name`: Name of the criterion (must match Features file)
-- `hierarchy`: Hierarchy level (0 = top level, 1+ = sub-levels)
-- `parent`: Parent criterion name (use `"-"` for level 0)
-- `weight`: Importance weight (1-5 scale, where 5 is most important)
+**Cell conventions (aligned with readers in `axiom.py` / `calculate.py`):**
 
-**Example (No Hierarchy):**
-```csv
-feature_name,hierarchy,parent,weight
-RAM,0,"-",5
-Price,0,"-",5
-Status,0,"-",3
-Guarantee,0,"-",2
-```
-
-**Example (With Hierarchy):**
-```csv
-feature_name,hierarchy,parent,weight
-Performance,0,"-",5
-Price,0,"-",5
-RAM,1,Performance,4
-CPU,1,Performance,5
-MonthlyPrice,1,Price,5
-```
-
-**Notes:**
-- All criteria in Features file must be listed
-- Hierarchy level 0 = no parent (use `"-"` for parent)
-- Weights are automatically normalized
-- Hierarchical weights are calculated as: H1 × H2
-
-### 3. Dataset File (CSV)
-
-This file contains the alternatives/options to be evaluated.
-
-**Required Columns:**
-- `ListingID`: Unique identifier for each alternative
-- One column for each criterion in the Features file (in the same order)
-
-**Data Format Rules:**
-- **CSINGLETON**: Single number (e.g., `8`, `12.5`)
-- **CINTERVAL**: Range format `"lower-upper"` (e.g., `"10-20"`, `"1000-7500"`)
-- **FUZZY**: 
-  - With deviation: `"12+-1"` or `"10(0.25)"`
-  - Single value: `5.0`
-- **BOOLEAN**: `Yes` or `No`
-
-**Example:**
-```csv
-ListingID,RAM,Price,Status,Guarantee
-L000001,8.0,13000,2-3.5,Yes
-L000002,16.0,17450,5.0+-1,Yes
-L000003,8.0,32900,2.0,No
-```
-
-**Notes:**
-- ListingID must be unique
-- Column order should match Features file
-- Interval values can be written as ranges: `"10-20"`
-- Fuzzy values can use `+-` or `()` notation
+- Numbers: `8`, `12.5`
+- Intervals: `"10-20"`
+- Fuzzy: `"12+-1"`, forms with parentheses, etc.
+- Boolean: `Yes` / `No`
 
 ---
 
-## Usage Guide
+## Usage
 
-### Basic Workflow
-
-1. **Prepare Input Files**: Create your Features, Weights, and Dataset CSV files
-2. **Import Modules**: Import required modules
-3. **Read Input Data**: Load your CSV files
-4. **Run Analysis**: Execute either MCDMAxiom or Minkowski-Prospect method
-5. **Display Results**: View and interpret the results
-
-### Method 1: Axiomatic Design (MCDMAxiom)
-
-This method calculates Information Content (I-Value) for each alternative.
+### Axiomatic Design only
 
 ```python
 import MCDMAxiom.axiom as ax
 import MCDMAxiom.calculate as cal
 
-# Step 1: Read input files
-criteria = ax.readCriteria("test/LaptopCase_Features.csv")
-weights = ax.readWeights("test/LaptopCase_Weights.csv")
-data, dataTypes, cols = ax.readData("test/LaptopCase_Dataset.csv")
+criteria = ax.readCriteria("test/YachtFeatureList.csv")
+weights = ax.readWeights("test/YachtEqualWeights.csv")
+data, data_types, cols = ax.readData("test/YachtDataset.csv")
 
-# Step 2: Run Axiomatic Design calculation
-recommendationList, columns = cal.runMCDMAxiom(criteria, weights, data, dataTypes, cols)
-
-# Step 3: Display results
-ax.showRecommendationResults(recommendationList, columns)
+recommendation_list, columns = cal.runMCDMAxiom(
+    criteria, weights, data, data_types, cols
+)
+ax.showRecommendationResults(recommendation_list, columns)
 ```
 
-### Method 2: Minkowski-Prospect
-
-This method combines Minkowski distance with Prospect Theory.
+### Minkowski–Prospect only
 
 ```python
 import MCDMAxiom.axiom as ax
 import minkowski
 
-# Step 1: Read input files
-criteria = ax.readCriteria("test/LaptopCase_Features.csv")
-weights = ax.readWeights("test/LaptopCase_Weights.csv")
-data, dataTypes, cols = ax.readData("test/LaptopCase_Dataset.csv")
+criteria = ax.readCriteria("test/YachtFeatureList.csv")
+weights = ax.readWeights("test/YachtEqualWeights.csv")
+data, data_types, cols = ax.readData("test/YachtDataset.csv")
 
-# Step 2: Run Minkowski-Prospect calculation
-tam_liste, cols3 = minkowski.Minkowski_Prospect(criteria, data, cols, weights)
-
-# Step 3: Display results
-minkowski.showRecommendationResults(tam_liste, cols3)
-```
-
-### Combined Usage
-
-You can run both methods and compare results:
-
-```python
-import MCDMAxiom.axiom as ax
-import MCDMAxiom.calculate as cal
-import minkowski
-
-# Read input files
-criteria = ax.readCriteria("test/LaptopCase_Features.csv")
-weights = ax.readWeights("test/LaptopCase_Weights.csv")
-data, dataTypes, cols = ax.readData("test/LaptopCase_Dataset.csv")
-
-# Run Axiomatic Design
-recommendationList, columns = cal.runMCDMAxiom(criteria, weights, data, dataTypes, cols)
-
-# Run Minkowski-Prospect
-tam_liste, cols3 = minkowski.Minkowski_Prospect(criteria, data, cols, weights)
-
-# Display both results
-print("=== Axiomatic Design Results ===")
-ax.showRecommendationResults(recommendationList, columns)
-
-print("\n=== Minkowski-Prospect Results ===")
-minkowski.showRecommendationResults(tam_liste, cols3)
-```
-
----
-
-## Output Explanation
-
-### Axiomatic Design Output
-
-The output includes:
-- **ListingID**: Unique identifier for each alternative
-- **All criterion columns**: Original data values
-- **IValue**: Information Content value (lower is better)
-
-**Interpretation:**
-- **IValue = 0.000001 or very small**: Perfect or near-perfect match
-- **IValue < 1**: Good match
-- **IValue > 1**: Poor match
-- **IValue = inf**: Does not meet requirements (excluded from results)
-
-Results are sorted by IValue (ascending), so the best matches appear first.
-
-### Minkowski-Prospect Output
-
-The output includes:
-- **ListingID**: Unique identifier for each alternative
-- **All criterion columns**: Original data values
-- **CA_Value**: Cumulative Advantage value (higher is better)
-- **CDA_Value**: Cumulative Disadvantage value (for declined alternatives)
-
-**Interpretation:**
-- **CA_Value**: Higher values indicate better alternatives
-- Alternatives are grouped by I-Value and ranked within groups
-- Results are sorted by CA_Value (descending) for accepted alternatives
-- CDA_Value is shown for alternatives that don't meet minimum requirements
-
-**Key Differences:**
-- **Axiomatic Design**: Focuses on Information Content (lower I-Value = better)
-- **Minkowski-Prospect**: Uses distance-based approach with Prospect Theory (higher CA-Value = better)
-
----
-
-## Examples
-
-### Example 1: Laptop Selection
-
-This example evaluates laptops based on multiple criteria.
-
-**Features File (LaptopCase_Features.csv):**
-```csv
-feature_name,value,fuzziness,design_req,criteria_type
-RAM,8,-,CSINGLETON,BENEFIT
-Price,"10000-45000",-,CINTERVAL,COST
-Status,4,1,FUZZY,TARGET
-Battery,"60-100",-,CINTERVAL,BENEFIT
-```
-
-**Weights File (LaptopCase_Weights.csv):**
-```csv
-feature_name,hierarchy,parent,weight
-RAM,0,"-",5
-Price,0,"-",5
-Status,0,"-",3
-Battery,0,"-",2
-```
-
-**Dataset File (LaptopCase_Dataset.csv):**
-```csv
-ListingID,RAM,Price,Status,Battery
-L000001,8.0,13000,2-3.5,90
-L000002,16.0,17450,5.0+-1,90
-L000003,8.0,32900,2.0,80
-```
-
-**Code:**
-```python
-import MCDMAxiom.axiom as ax
-import MCDMAxiom.calculate as cal
-import minkowski
-
-criteria = ax.readCriteria("test/LaptopCase_Features.csv")
-weights = ax.readWeights("test/LaptopCase_Weights.csv")
-data, dataTypes, cols = ax.readData("test/LaptopCase_Dataset.csv")
-
-# Axiomatic Design
-recommendationList, columns = cal.runMCDMAxiom(criteria, weights, data, dataTypes, cols)
-ax.showRecommendationResults(recommendationList, columns)
-
-# Minkowski-Prospect
 tam_liste, cols3 = minkowski.Minkowski_Prospect(criteria, data, cols, weights)
 minkowski.showRecommendationResults(tam_liste, cols3)
 ```
 
-### Example 2: House Selection
+### Both methods
 
-**Features File:**
-```csv
-feature_name,value,fuzziness,design_req,criteria_type
-netsize,"50-135",-,CINTERVAL,BENEFIT
-brutsize,"0-175",-,CINTERVAL,BENEFIT
-roomnumber,2,-,CSINGLETON,BENEFIT
-price,"1000-7500",-,CINTERVAL,COST
-age,10,0.5,FUZZY,COST
-insite,Both,-,BOOLEAN,BENEFIT
+```python
+import MCDMAxiom.axiom as ax
+import MCDMAxiom.calculate as cal
+import minkowski
+
+criteria = ax.readCriteria("test/YachtFeatureList.csv")
+weights = ax.readWeights("test/YachtDifferentWeights.csv")
+data, data_types, cols = ax.readData("test/YachtDataset.csv")
+
+rec, columns = cal.runMCDMAxiom(criteria, weights, data, data_types, cols)
+tam_liste, cols3 = minkowski.Minkowski_Prospect(criteria, data, cols, weights)
+
+print("=== Axiomatic Design (I-value) ===")
+ax.showRecommendationResults(rec, columns)
+print("\n=== Minkowski–Prospect (CA_Value) ===")
+minkowski.showRecommendationResults(tam_liste, cols3)
 ```
 
-**Weights File (with hierarchy):**
-```csv
-feature_name,hierarchy,parent,weight
-size,0,"-",1
-price,0,"-",1
-netsize,1,size,2
-brutsize,1,size,3
-roomnumber,1,size,2
-monthlyprice,1,price,1
-age,1,building,2
-insite,1,building,2
+Run the bundled demo:
+
+```bash
+python test.py
 ```
+
+([`test.py`](test.py) must point at CSV paths that exist under [`test/`](test/).)
+
+---
+
+## Outputs
+
+### Axiomatic Design
+
+Output rows include original columns plus **`IValue`**.
+
+- Prefer **small** **`IValue`**: very small ≈ excellent fit.
+- **`IValue`** = infinity means hard failure on a gated criterion (row may be dropped from the accepted list depending on internals).
+
+Sorting is by **`IValue`** ascending.
+
+### Minkowski–Prospect
+
+Adds **advantage/disadvantage** style columns (**`CA_Value`**, **`CDA_Value`** where applicable).
+
+- **`CA_Value`**: higher is better among feasible alternatives.
+- Use together with axiomatic ranks for sensitivity checks.
+
+---
+
+## Worked example (yacht dataset)
+
+The **`test/`** bundle models **motor yacht listing** selection: budgets, hull vintage, cabins, sanitary capacity, hull geometry, tankage, machinery, documented maintenance, and installed equipment (**Radar**, **Jenerator** [filename spelling], **GPS**).
+
+### Criterion overview
+
+| Criterion | Typical role | Notes |
+|-----------|----------------|--------|
+| **Price** | `CINTERVAL`, `COST` | Prefer lower price inside bracket. |
+| **Year** | `CINTERVAL`, `TARGET` | Model years of interest; outside range penalized strongly. |
+| **Cabins**, **WC**, **Length**, **Deepness**, **Width**, **Weight**, **WaterTank**, **FuelTank**, **MotorPower** | Mostly benefit / fuzzy / intervals | Matches listings with singletons, intervals, or fuzzy cells. |
+| **MotorHour** | `COST` | Prefer lower engine hours at the design singleton. |
+| **MaintenanceRecord** | `BOOLEAN` | Design file can require **`Yes`** for full service logs. |
+| **Radar**, **Jenerator**, **GPS** | `BOOLEAN` | **`Both`** relaxes equip requirements; tighten to **`Yes`** if mandatory. |
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| [`test/YachtFeatureList.csv`](test/YachtFeatureList.csv) | Design requirements and criterion types |
+| [`test/YachtEqualWeights.csv`](test/YachtEqualWeights.csv) | Flat hierarchy, uniform emphasis |
+| [`test/YachtDifferentWeights.csv`](test/YachtDifferentWeights.csv) | Stronger emphasis on e.g. price and length |
+| [`test/YachtDataset.csv`](test/YachtDataset.csv) | **`A001`…** listing rows |
+
+Tight **`Year`** or boolean filters can shrink the feasible set (many infinite I-values). Widen intervals or relax **`BOOLEAN`** targets to expose more listings.
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom | What to check |
+|---------|----------------|
+| **`FileNotFoundError`** | Run from project root or pass absolute paths; confirm **`test/*.csv`** names. |
+| Column / order mismatch | Feature names and order must match between criteria, weights (by feature list), and dataset columns after **`ListingID`**. |
+| Wrong inferred type | Intervals need `-` in strings; fuzzy uses `+-` / parentheses; booleans exactly **`Yes`** / **`No`**. |
+| Empty or tiny result set | Severe **`TARGET`** / **`BOOLEAN`** rules remove rows; soften design file. |
+| **`ModuleNotFoundError: MCDMAxiom`** | CWD / `PYTHONPATH` should include project root containing **`MCDMAxiom/`**. |
+| setuptools vs folder name | Editable **`pip install -e .`** may need **`setup.py`** updated to **`packages=find_packages()`** naming **`MCDMAxiom`**; until then use **`requirements.txt`** + root on path. |
 
-#### 1. File Not Found Error
-**Error:** `FileNotFoundError: [Errno 2] No such file or directory`
-
-**Solution:**
-- Check that file paths are correct
-- Use relative paths from your script location
-- Ensure CSV files exist in the specified directory
-
-#### 2. Column Mismatch Error
-**Error:** Columns don't match between files
-
-**Solution:**
-- Ensure Features file column names match Dataset file columns (except ListingID)
-- Verify column order matches between files
-- Check for typos in column names
-
-#### 3. Data Type Detection Issues
-**Error:** Incorrect data type detection
-
-**Solution:**
-- For intervals, use format: `"10-20"` (with quotes in CSV)
-- For fuzzy values, use: `"12+-1"` or `"10(0.25)"`
-- For boolean, use exactly: `Yes` or `No`
-- Ensure numeric values don't have quotes
-
-#### 4. Empty Results
-**Error:** No alternatives found matching criteria
-
-**Solution:**
-- Check that alternatives meet at least some requirements
-- Verify criteria values are reasonable
-- Check for data type mismatches
-- Some alternatives may have IValue = inf (infinite), which are excluded
-
-#### 5. Import Errors
-**Error:** `ModuleNotFoundError: No module named 'MCDMAxiom'`
-
-**Solution:**
-- Ensure you're running from the project root directory
-- Check that MCDMAxiom folder exists
-- Verify Python path includes the project directory
-
-#### 6. Weight Normalization Warnings
-**Error:** Weights not summing correctly
-
-**Solution:**
-- Weights are automatically normalized, so exact sums don't matter
-- Use values 1-5 for relative importance
-- Higher numbers = more important
-
-### Best Practices
-
-1. **File Organization:**
-   - Keep all CSV files in a `test/` or `data/` folder
-   - Use descriptive file names
-   - Maintain consistent column ordering
-
-2. **Data Quality:**
-   - Ensure ListingIDs are unique
-   - Check for missing values
-   - Validate data types match design requirements
-
-3. **Performance:**
-   - For large datasets (>1000 alternatives), consider filtering first
-   - Both methods can handle moderate-sized datasets efficiently
-
-4. **Result Interpretation:**
-   - Compare both methods for validation
-   - Lower I-Value (Axiomatic) = Better
-   - Higher CA-Value (Minkowski-Prospect) = Better
-   - Consider top 5-10 recommendations
+**Practices:** keep ListingIDs unique; prototype on a small CSV; compare axiomatic ranks with Minkowski–Prospect for robustness.
 
 ---
 
 ## References
 
-### Academic References
+### Academic
 
-1. Baykasoglu, A., Felekoglu, B., Unal, C. (2022). Perceived usability evaluation of learning management systems via axiomatic design with a real life application, Kybernetes, Article in press, DOI: 10.1108/K-07-2022-1024
+1. Baykasoglu, A., Felekoglu, B., Unal, C. (2022). Perceived usability evaluation of learning management systems via axiomatic design with a real life application. *Kybernetes*. DOI: 10.1108/K-07-2022-1024  
+2. Subulan, K. & Baykasoğlu, A. (2021). An Improved Extension of Weighted Hierarchical Fuzzy Axiomatic Design. *Sustainable Production and Logistics*, Ch. 16, 321–357. DOI: 10.1201/9781003005018-16-17  
 
-2. Subulan, K. and Baykasoğlu A. (2021) An Improved Extension of Weighted Hierarchical Fuzzy Axiomatic Design. Sustainable Production and Logistics. Chapter 16 - Sustainable Route Selection Problem in Intermodal Transportation Networks. 321-357. 10.1201/9781003005018-16-17.
 
-3. Baykasoglu, A., & Senyuzluler Ozcelik, F. (2023). MCDMAxiom - The library for applying Axiomatic Design Methodology on Recommendation Systems. *[Article link to be added]*
+### Methodological
 
-### Methodology References
-
-- **Axiomatic Design**: Suh, N. P. (2001). Axiomatic Design: Advances and Applications. Oxford University Press.
-- **Prospect Theory**: Kahneman, D., & Tversky, A. (1979). Prospect Theory: An Analysis of Decision under Risk. Econometrica, 47(2), 263-291.
-- **Minkowski Distance**: Standard distance metric in multi-dimensional space
-
----
-
-## Support and Contact
-
-For issues, questions, or contributions:
-- Check the README.md for additional information
-- Review example files in the `test/` directory
-- Ensure all dependencies are correctly installed
+- Suh, N. P. (2001). *Axiomatic Design: Advances and Applications*. Oxford University Press.  
+- Kahneman, D. & Tversky, A. (1979). Prospect Theory: An Analysis of Decision under Risk. *Econometrica*, 47(2), 263–291.
 
 ---
 
 **Version:** 1.0  
-**Last Updated:** 2024  
-**License:** [Check project license file]
+**Last updated:** April 2026  
 
+For questions, verify dependencies, CSV layout, and the [`test/`](test/) yacht sample paths in this README.
